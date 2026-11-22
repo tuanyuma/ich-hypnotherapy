@@ -472,6 +472,8 @@ table.data-table tbody td {
 }
 table.data-table tbody tr:last-child td { border-bottom: none; }
 table.data-table tbody tr:hover td { background: #F5F9FF; }
+table.data-table tbody tr.row-clickable { cursor: pointer; }
+table.data-table tbody tr.row-clickable:hover td { background: #EBF3FE; }
 
 .pagination-bar {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;

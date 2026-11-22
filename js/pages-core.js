@@ -371,7 +371,7 @@
   /* ============================================================
    * W-04: MASTER CLIENTS DIRECTORY (1 KLIEN = 1 CLICH00001)
    * ============================================================ */
-  const clientFilter = { query: '', source: '', status: '', icStatus: '', page: 1, pageSize: 20 };
+  const clientFilter = { query: '', source: '', status: '', icStatus: '', page: 1, pageSize: 10 };
 
   Pages.clients = function (container) {
     const canEdit = App.state.user && App.state.user.role !== 'Terapis';
@@ -430,39 +430,47 @@
         '<th>ID Klien</th><th>Nama Lengkap &amp; WA</th><th>Sumber Marketing</th><th>Informed Consent</th><th>Terakhir Sesi</th><th>Status</th><th>Aksi</th>' +
         '</tr></thead><tbody>' +
         res.items.map(function (c) {
-          return '<tr>' +
-            '<td class="mono fw-700"><a href="#/clients/' + UI.esc(c.Client_ID) + '">' + UI.esc(c.Client_ID) + '</a></td>' +
+          return '<tr class="row-clickable" data-open-cl="' + UI.esc(c.Client_ID) + '" title="Klik untuk membuka detail profil 360° klien">' +
+            '<td class="mono fw-700" style="color:var(--primary)">' + UI.esc(c.Client_ID) + '</td>' +
             '<td><div class="fw-600">' + UI.esc(c.Full_Name) + '</div><div class="text-xs muted mono">' + UI.esc(c.Phone_WA) + '</div></td>' +
             '<td><span class="badge badge-blue">' + UI.esc(c.Marketing_Source || 'Lainnya') + '</span></td>' +
             '<td>' + UI.statusBadge(c.Informed_Consent_Status || 'Belum Ada') + '</td>' +
             '<td class="tabular">' + (c.Last_Session_Date ? UI.fmtDateID(c.Last_Session_Date) : '<span class="muted">Belum sesi</span>') + '</td>' +
             '<td>' + UI.statusBadge(c.Client_Status) + '</td>' +
-            '<td><div class="row" style="gap:6px">' +
-              '<button type="button" class="btn btn-xs btn-soft" onclick="App.go(\'clients/' + UI.esc(c.Client_ID) + '\')">Profil 360°</button>' +
+            '<td><div class="row" style="gap:6px;flex-wrap:nowrap">' +
               (canEdit ? '<button type="button" class="btn btn-xs btn-secondary" data-edit-cl="' + UI.esc(c.Client_ID) + '">Edit</button>' : '') +
-              (canArchive ? '<button type="button" class="btn btn-xs btn-danger-outline" data-arch-cl="' + UI.esc(c.Client_ID) + '">Arsip</button>' : '') +
+              (canArchive ? '<button type="button" class="btn btn-xs btn-danger-outline" data-arch-cl="' + UI.esc(c.Client_ID) + '">Hapus</button>' : '') +
+              (!canEdit && !canArchive ? '<span class="text-xs muted">Lihat 360°</span>' : '') +
             '</div></td>' +
             '</tr>';
         }).join('') +
         '</tbody></table></div>';
 
+      area.querySelectorAll('tr[data-open-cl]').forEach(function (tr) {
+        tr.onclick = function (e) {
+          if (e.target.closest('button')) return;
+          App.go('clients/' + tr.getAttribute('data-open-cl'));
+        };
+      });
       area.querySelectorAll('[data-edit-cl]').forEach(function (b) {
-        b.onclick = function () {
+        b.onclick = function (e) {
+          e.stopPropagation();
           const item = res.items.find(function (x) { return x.Client_ID === b.getAttribute('data-edit-cl'); });
           if (item) Pages.openClientModal(item);
         };
       });
       area.querySelectorAll('[data-arch-cl]').forEach(function (b) {
-        b.onclick = async function () {
+        b.onclick = async function (e) {
+          e.stopPropagation();
           const id = b.getAttribute('data-arch-cl');
-          const reason = prompt('Masukkan alasan pengarsipan (soft delete) klien ' + id + ':');
+          const reason = prompt('Masukkan alasan penghapusan (soft delete/arsip) klien ' + id + ':');
           if (!reason) return;
           try {
             await API.call('clients.archive', { Client_ID: id, reason: reason });
-            UI.toast('Klien berhasil diarsipkan.', 'ok');
+            UI.toast('Klien berhasil dihapus.', 'ok');
             App.refreshBootstrap();
             loadClients(true);
-          } catch (e) { UI.toast(e.message, 'err'); }
+          } catch (err) { UI.toast(err.message, 'err'); }
         };
       });
 

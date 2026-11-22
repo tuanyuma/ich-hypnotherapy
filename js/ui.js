@@ -133,22 +133,22 @@
       '</div>';
   }
 
-  function renderPagination(meta, onPageChange) {
+  function renderPagination(meta, onPageChange, opts) {
     const total = meta.total || 0;
     const page = meta.page || 1;
-    const pageSize = meta.pageSize || 20;
+    const pageSize = Number(meta.pageSize) || 10;
     const totalPages = meta.totalPages || 1;
     const from = total ? ((page - 1) * pageSize + 1) : 0;
     const to = Math.min(total, page * pageSize);
+    const sizes = (opts && opts.sizes) || [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
     const wrap = document.createElement('div');
     wrap.className = 'pagination-bar';
     wrap.innerHTML = '<div>Menampilkan <strong>' + from + '–' + to + '</strong> dari <strong>' + total + '</strong> data</div>' +
       '<div class="row">' +
       '<label class="text-xs muted">Baris:</label>' +
-      '<select class="select" style="height:32px;width:72px;padding:0 8px" data-pg-size>' +
-      '<option value="20"' + (pageSize === 20 ? ' selected' : '') + '>20</option>' +
-      '<option value="30"' + (pageSize === 30 ? ' selected' : '') + '>30</option>' +
+      '<select class="select" style="height:32px;width:78px;padding:0 8px" data-pg-size>' +
+      sizes.map(function (s) { return '<option value="' + s + '"' + (pageSize === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') +
       '</select>' +
       '<button type="button" class="btn btn-sm btn-secondary" data-pg-prev' + (page <= 1 ? ' disabled' : '') + '>‹ Prev</button>' +
       '<span class="text-xs fw-600 tabular">Hal ' + page + ' / ' + totalPages + '</span>' +

@@ -7,9 +7,9 @@
   const Pages = global.Pages || (global.Pages = {});
 
   /* ============================================================
-   * W-06: INITIAL ASSESSMENT WORKSPACE
+   * W-06: INITIAL ASSESSMENT WORKSPACE (LIST + MODAL TAMBAH/EDIT + DETAIL)
    * ============================================================ */
-  const asmState = { query: '', page: 1, pageSize: 20 };
+  const asmState = { query: '', therapistId: '', page: 1, pageSize: 10 };
 
   Pages.assessments = function (container) {
     const user = App.state.user || {};
@@ -17,81 +17,171 @@
 
     container.innerHTML =
       '<div class="neu-card card-pad">' +
-        '<div class="card-header"><div><h1>Assessment Awal Klien</h1><p class="card-subtitle">Pencatatan asesmen klinis awal, riwayat keluhan, tujuan terapi, &amp; skrining risiko</p></div></div>' +
-        '<form id="asmForm" class="stack-md">' +
-          '<div class="form-grid-3">' +
-            '<div class="field"><label>Cari Klien (Ketik 2–3 Karakter) *</label><div id="asmClientAc"></div></div>' +
-            '<div class="field"><label>Terapis Penilai *</label><select name="Therapist_ID" id="asmTherapist" class="select"' + (user.role === 'Terapis' ? ' disabled' : '') + '>' +
-              therapists.map(function (t) { return '<option value="' + UI.esc(t.Therapist_ID) + '"' + (user.therapistId === t.Therapist_ID ? ' selected' : '') + '>' + UI.esc(t.Full_Name) + '</option>'; }).join('') +
-            '</select></div>' +
-            '<div class="field"><label>Tanggal Assessment</label><input type="date" name="Assessment_Date" class="input" value="' + UI.todayStr() + '" /></div>' +
+        '<div class="card-header">' +
+          '<div><h1>Assessment Awal Klien</h1><p class="card-subtitle">Riwayat asesmen klinis awal, keluhan utama, tujuan terapi, &amp; skrining risiko</p></div>' +
+          '<div class="row">' +
+            '<button type="button" class="btn btn-secondary btn-sm" id="btnExportAsmCsv">' + UI.icon('download', 15) + ' Export CSV</button>' +
+            '<button type="button" class="btn btn-primary btn-pill" id="btnAddAsm">' + UI.icon('plus', 15) + ' Tambah Assessment</button>' +
           '</div>' +
-          '<div class="form-grid-2">' +
-            '<div class="field"><label>Keluhan Utama *</label><textarea name="Main_Complaint" class="textarea" required placeholder="Deskripsikan keluhan utama klien..."></textarea></div>' +
-            '<div class="field"><label>Durasi &amp; Riwayat Keluhan</label><textarea name="Complaint_Duration_History" class="textarea" placeholder="Sejak kapan muncul, pemicu utama, frekuensi..."></textarea></div>' +
-            '<div class="field"><label>Riwayat Medis / Psikologis</label><textarea name="Medical_Psych_History" class="textarea" placeholder="Riwayat pengobatan, psikiater, trauma masa lalu..."></textarea></div>' +
-            '<div class="field"><label>Tujuan Terapi (Therapy Goals)</label><textarea name="Therapy_Goals" class="textarea" placeholder="Target perubahan terukur yang diinginkan klien..."></textarea></div>' +
-            '<div class="field"><label>Skrining Risiko Klinis</label><input name="Risk_Screening" class="input" placeholder="cth: Tidak ada risiko self-harm; aman untuk induksi hipnosis" /></div>' +
-            '<div class="field"><label>Rekomendasi Rencana Awal</label><input name="Initial_Recommendation" class="input" placeholder="cth: Rekomendasi Paket Ansietas 4 sesi" /></div>' +
-          '</div>' +
-          '<div class="row" style="justify-content:flex-end">' +
-            '<button type="reset" class="btn btn-secondary">Reset Form</button>' +
-            '<button type="submit" class="btn btn-primary" id="btnSaveAsm">Simpan Assessment Awal</button>' +
-          '</div>' +
-        '</form>' +
-      '</div>' +
-      '<div class="neu-card card-pad">' +
-        '<div class="card-header"><div><h2>Riwayat Assessment Klien</h2></div><input type="search" id="asmSearch" class="input" style="width:240px" placeholder="Cari klien atau keluhan..." value="' + UI.esc(asmState.query) + '" /></div>' +
-        '<div id="asmTable">' + UI.skeletonTable(5) + '</div><div id="asmPag"></div>' +
+        '</div>' +
+        '<div class="filter-bar">' +
+          '<input type="search" id="asmSearch" class="input search-grow" placeholder="Cari ID CLICH, nama klien, atau keluhan..." value="' + UI.esc(asmState.query) + '" />' +
+          (user.role !== 'Terapis'
+            ? '<select id="asmFilterTh" class="select"><option value="">Semua Terapis</option>' +
+                therapists.map(function (t) { return '<option value="' + UI.esc(t.Therapist_ID) + '"' + (asmState.therapistId === t.Therapist_ID ? ' selected' : '') + '>' + UI.esc(t.Full_Name) + '</option>'; }).join('') +
+              '</select>'
+            : '') +
+        '</div>' +
+        '<div id="asmTable">' + UI.skeletonTable(6) + '</div>' +
+        '<div id="asmPag"></div>' +
       '</div>';
 
-    const ac = UI.mountClientAutocomplete(document.getElementById('asmClientAc'));
-    const form = document.getElementById('asmForm');
-    form.onsubmit = async function (e) {
-      e.preventDefault();
-      const cid = ac.getValue();
-      if (!cid) { UI.toast('Silakan pilih klien dari daftar pencarian terlebih dahulu.', 'warn'); return; }
-      const fd = new FormData(form);
-      const payload = { Client_ID: cid, Therapist_ID: user.role === 'Terapis' ? user.therapistId : document.getElementById('asmTherapist').value };
-      fd.forEach(function (v, k) { payload[k] = v; });
-      const btn = document.getElementById('btnSaveAsm');
-      btn.disabled = true; btn.textContent = 'Menyimpan...';
-      try {
-        const r = await API.call('assessments.save', payload);
-        UI.toast(r.message, 'ok');
-        form.reset(); ac.setValue('', '');
-        loadAssessments(true);
-      } catch (err) { UI.toast(err.message, 'err'); }
-      finally { btn.disabled = false; btn.textContent = 'Simpan Assessment Awal'; }
+    document.getElementById('btnAddAsm').onclick = function () { Pages.openAssessmentModal(); };
+    document.getElementById('btnExportAsmCsv').onclick = function () {
+      const items = Pages._lastAssessments || [];
+      UI.exportCsv('assessment-awal-ich.csv', ['Assessment_ID', 'Tanggal', 'Client_ID', 'Nama_Klien', 'Terapis', 'Keluhan_Utama', 'Tujuan_Terapi', 'Skrining_Risiko', 'Rekomendasi'],
+        items.map(function (a) { return [a.Assessment_ID, a.Assessment_Date, a.Client_ID, a.Client_Name, a.Therapist_Name, a.Main_Complaint, a.Therapy_Goals, a.Risk_Screening, a.Initial_Recommendation]; }));
     };
 
     let t = null;
     document.getElementById('asmSearch').oninput = function (e) { clearTimeout(t); t = setTimeout(function () { asmState.query = e.target.value; asmState.page = 1; loadAssessments(); }, 250); };
+    const thSel = document.getElementById('asmFilterTh');
+    if (thSel) thSel.onchange = function (e) { asmState.therapistId = e.target.value; asmState.page = 1; loadAssessments(); };
+
     loadAssessments();
   };
 
   function loadAssessments(force) {
     API.swr('asm_' + JSON.stringify(asmState), 'assessments.list', asmState, function (res) {
+      Pages._lastAssessments = res.items || [];
       const el = document.getElementById('asmTable');
       const pg = document.getElementById('asmPag');
       if (!el) return;
       if (!res.items.length) {
-        el.innerHTML = UI.emptyState('Belum Ada Assessment', 'Isi formulir di atas untuk menyimpan assessment awal klien.');
+        el.innerHTML = UI.emptyState('Belum Ada Assessment', 'Klik tombol "+ Tambah Assessment" di kanan atas untuk mencatat asesmen awal klien.',
+          '<button type="button" class="btn btn-primary btn-sm" onclick="Pages.openAssessmentModal()">+ Tambah Assessment</button>');
         pg.innerHTML = ''; return;
       }
-      el.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr><th>Tanggal</th><th>Klien</th><th>Terapis</th><th>Keluhan Utama</th><th>Tujuan Terapi</th><th>Rekomendasi</th></tr></thead><tbody>' +
+      el.innerHTML = '<div class="table-wrap"><table class="data-table"><thead><tr>' +
+        '<th>Tanggal</th><th>Klien</th><th>Terapis</th><th>Keluhan Utama</th><th>Tujuan Terapi</th><th>Rekomendasi</th><th>Aksi</th>' +
+        '</tr></thead><tbody>' +
         res.items.map(function (a) {
-          return '<tr><td class="tabular">' + UI.fmtDateID(a.Assessment_Date) + '</td>' +
-            '<td><a href="#/clients/' + UI.esc(a.Client_ID) + '" class="fw-600">' + UI.esc(a.Client_Name) + '</a><div class="text-xs mono muted">' + UI.esc(a.Client_ID) + '</div></td>' +
+          return '<tr class="row-clickable" data-view-asm="' + UI.esc(a.Assessment_ID) + '" title="Klik baris untuk melihat detail lengkap assessment">' +
+            '<td class="tabular"><div class="fw-600">' + UI.fmtDateID(a.Assessment_Date) + '</div><div class="text-xs mono muted">' + UI.esc(a.Assessment_ID) + '</div></td>' +
+            '<td><div class="fw-600" style="color:var(--primary)">' + UI.esc(a.Client_Name) + '</div><div class="text-xs mono muted">' + UI.esc(a.Client_ID) + '</div></td>' +
             '<td>' + UI.esc(a.Therapist_Name) + '</td>' +
-            '<td>' + UI.esc((a.Main_Complaint || '').slice(0, 80)) + '</td>' +
-            '<td>' + UI.esc((a.Therapy_Goals || '-').slice(0, 70)) + '</td>' +
-            '<td>' + UI.esc(a.Initial_Recommendation || '-') + '</td></tr>';
+            '<td>' + UI.esc((a.Main_Complaint || '').slice(0, 75)) + ((a.Main_Complaint || '').length > 75 ? '…' : '') + '</td>' +
+            '<td>' + UI.esc((a.Therapy_Goals || '-').slice(0, 65)) + ((a.Therapy_Goals || '').length > 65 ? '…' : '') + '</td>' +
+            '<td>' + UI.esc(a.Initial_Recommendation || '-') + '</td>' +
+            '<td><button type="button" class="btn btn-xs btn-secondary" data-edit-asm="' + UI.esc(a.Assessment_ID) + '">Edit</button></td>' +
+            '</tr>';
         }).join('') + '</tbody></table></div>';
+
+      el.querySelectorAll('tr[data-view-asm]').forEach(function (tr) {
+        tr.onclick = function (e) {
+          if (e.target.closest('button')) return;
+          const item = res.items.find(function (x) { return x.Assessment_ID === tr.getAttribute('data-view-asm'); });
+          if (item) openAssessmentDetailModal(item);
+        };
+      });
+      el.querySelectorAll('[data-edit-asm]').forEach(function (b) {
+        b.onclick = function (e) {
+          e.stopPropagation();
+          const item = res.items.find(function (x) { return x.Assessment_ID === b.getAttribute('data-edit-asm'); });
+          if (item) Pages.openAssessmentModal(item);
+        };
+      });
+
       pg.innerHTML = '';
       pg.appendChild(UI.renderPagination(res, function (p, ps) { asmState.page = p; asmState.pageSize = ps; loadAssessments(); }));
     }, { force: force }).catch(function (e) { UI.toast(e.message, 'err'); });
   }
+
+  function openAssessmentDetailModal(a) {
+    const body = UI.openModal('Detail Assessment — ' + a.Assessment_ID,
+      '<div class="stack-md">' +
+        '<div class="neu-tile" style="padding:14px">' +
+          '<div class="row-between">' +
+            '<div><span class="badge badge-blue mono">' + UI.esc(a.Client_ID) + '</span> <strong style="margin-left:6px;font-size:15px">' + UI.esc(a.Client_Name) + '</strong>' +
+            '<div class="text-xs muted" style="margin-top:4px">Terapis Penilai: <strong>' + UI.esc(a.Therapist_Name) + '</strong> · Tanggal: <strong>' + UI.fmtDateID(a.Assessment_Date) + '</strong></div></div>' +
+            '<button type="button" class="btn btn-xs btn-soft" id="btnAsmGo360">Profil 360° Klien</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="form-grid-2">' +
+          '<div class="neu-tile" style="padding:12px"><div class="kpi-label">Keluhan Utama</div><div class="text-sm" style="margin-top:5px;white-space:pre-wrap">' + UI.esc(a.Main_Complaint || '-') + '</div></div>' +
+          '<div class="neu-tile" style="padding:12px"><div class="kpi-label">Durasi &amp; Riwayat Keluhan</div><div class="text-sm" style="margin-top:5px;white-space:pre-wrap">' + UI.esc(a.Complaint_Duration_History || '-') + '</div></div>' +
+          '<div class="neu-tile" style="padding:12px"><div class="kpi-label">Riwayat Medis / Psikologis</div><div class="text-sm" style="margin-top:5px;white-space:pre-wrap">' + UI.esc(a.Medical_Psych_History || '-') + '</div></div>' +
+          '<div class="neu-tile" style="padding:12px"><div class="kpi-label">Tujuan Terapi (Therapy Goals)</div><div class="text-sm" style="margin-top:5px;white-space:pre-wrap">' + UI.esc(a.Therapy_Goals || '-') + '</div></div>' +
+          '<div class="neu-tile" style="padding:12px"><div class="kpi-label">Skrining Risiko Klinis</div><div class="text-sm" style="margin-top:5px">' + UI.esc(a.Risk_Screening || '-') + '</div></div>' +
+          '<div class="neu-tile" style="padding:12px"><div class="kpi-label">Rekomendasi Rencana Awal</div><div class="text-sm" style="margin-top:5px">' + UI.esc(a.Initial_Recommendation || '-') + '</div></div>' +
+        '</div>' +
+        '<div class="modal-foot">' +
+          '<button type="button" class="btn btn-secondary" onclick="UI.closeModal()">Tutup</button>' +
+          '<button type="button" class="btn btn-primary" id="btnAsmDetailEdit">Edit Assessment</button>' +
+        '</div>' +
+      '</div>', { lg: true });
+
+    body.querySelector('#btnAsmGo360').onclick = function () { UI.closeModal(); App.go('clients/' + a.Client_ID); };
+    body.querySelector('#btnAsmDetailEdit').onclick = function () { Pages.openAssessmentModal(a); };
+  }
+
+  Pages.openAssessmentModal = function (existing) {
+    const a = existing || {};
+    const user = App.state.user || {};
+    const therapists = App.state.therapists || [];
+    const selectedTh = a.Therapist_ID || (user.role === 'Terapis' ? user.therapistId : (therapists[0] ? therapists[0].Therapist_ID : ''));
+
+    const body = UI.openModal(a.Assessment_ID ? ('Edit Assessment — ' + a.Assessment_ID) : 'Tambah Assessment Awal Klien',
+      '<form id="asmForm" class="stack-md">' +
+        '<div class="form-grid-3">' +
+          '<div class="field"><label>Cari Klien (Ketik 2–3 Karakter) *</label><div id="asmClientAc"></div></div>' +
+          '<div class="field"><label>Terapis Penilai *</label><select name="Therapist_ID" id="asmTherapist" class="select"' + (user.role === 'Terapis' ? ' disabled' : '') + '>' +
+            therapists.map(function (t) { return '<option value="' + UI.esc(t.Therapist_ID) + '"' + (selectedTh === t.Therapist_ID ? ' selected' : '') + '>' + UI.esc(t.Full_Name) + '</option>'; }).join('') +
+          '</select></div>' +
+          '<div class="field"><label>Tanggal Assessment</label><input type="date" name="Assessment_Date" class="input" value="' + UI.esc((a.Assessment_Date || '').slice(0, 10) || UI.todayStr()) + '" /></div>' +
+        '</div>' +
+        '<div class="form-grid-2">' +
+          '<div class="field"><label>Keluhan Utama *</label><textarea name="Main_Complaint" class="textarea" required placeholder="Deskripsikan keluhan utama klien...">' + UI.esc(a.Main_Complaint || '') + '</textarea></div>' +
+          '<div class="field"><label>Durasi &amp; Riwayat Keluhan</label><textarea name="Complaint_Duration_History" class="textarea" placeholder="Sejak kapan muncul, pemicu utama, frekuensi...">' + UI.esc(a.Complaint_Duration_History || '') + '</textarea></div>' +
+          '<div class="field"><label>Riwayat Medis / Psikologis</label><textarea name="Medical_Psych_History" class="textarea" placeholder="Riwayat pengobatan, psikiater, trauma masa lalu...">' + UI.esc(a.Medical_Psych_History || '') + '</textarea></div>' +
+          '<div class="field"><label>Tujuan Terapi (Therapy Goals)</label><textarea name="Therapy_Goals" class="textarea" placeholder="Target perubahan terukur yang diinginkan klien...">' + UI.esc(a.Therapy_Goals || '') + '</textarea></div>' +
+          '<div class="field"><label>Skrining Risiko Klinis</label><input name="Risk_Screening" class="input" placeholder="cth: Tidak ada risiko self-harm; aman untuk induksi hipnosis" value="' + UI.esc(a.Risk_Screening || '') + '" /></div>' +
+          '<div class="field"><label>Rekomendasi Rencana Awal</label><input name="Initial_Recommendation" class="input" placeholder="cth: Rekomendasi Paket Ansietas 4 sesi" value="' + UI.esc(a.Initial_Recommendation || '') + '" /></div>' +
+        '</div>' +
+        '<div class="modal-foot">' +
+          '<button type="button" class="btn btn-secondary" onclick="UI.closeModal()">Batal</button>' +
+          '<button type="submit" class="btn btn-primary" id="btnSaveAsm">' + (a.Assessment_ID ? 'Simpan Perubahan' : 'Simpan Assessment Awal') + '</button>' +
+        '</div>' +
+      '</form>', { lg: true });
+
+    const ac = UI.mountClientAutocomplete(body.querySelector('#asmClientAc'), {
+      initialId: a.Client_ID || '',
+      initialLabel: a.Client_ID ? (a.Client_ID + ' — ' + (a.Client_Name || '')) : ''
+    });
+
+    const form = body.querySelector('#asmForm');
+    form.onsubmit = async function (e) {
+      e.preventDefault();
+      const cid = ac.getValue();
+      if (!cid) { UI.toast('Silakan pilih klien dari daftar pencarian terlebih dahulu.', 'warn'); return; }
+      const fd = new FormData(form);
+      const payload = {
+        Assessment_ID: a.Assessment_ID || '',
+        Client_ID: cid,
+        Therapist_ID: user.role === 'Terapis' ? user.therapistId : body.querySelector('#asmTherapist').value
+      };
+      fd.forEach(function (v, k) { payload[k] = v; });
+      const btn = body.querySelector('#btnSaveAsm');
+      btn.disabled = true; btn.textContent = 'Menyimpan...';
+      try {
+        const r = await API.call('assessments.save', payload);
+        UI.toast(r.message, 'ok');
+        UI.closeModal();
+        loadAssessments(true);
+      } catch (err) { UI.toast(err.message, 'err'); }
+      finally { btn.disabled = false; btn.textContent = a.Assessment_ID ? 'Simpan Perubahan' : 'Simpan Assessment Awal'; }
+    };
+  };
 
   /* ============================================================
    * W-07: APPOINTMENTS & SCHEDULING MANAGER
